@@ -1,0 +1,5 @@
+pycryptodome
+pillow
+numpy
+matplotlib
+customtkinter
