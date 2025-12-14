@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.bin
+*.json
+encrypted_*.png
+decrypted_*.png
+.env
+.idea/
+.vscode/
