@@ -19,13 +19,10 @@ A Python-based GUI application for encrypting and decrypting images using AES en
 - Pillow
 - Matplotlib
 
-## 📸 Screenshots
-_Add screenshots here_
-
 ## ⚙️ Installation
 
 ```bash
 git clone https://github.com/yourusername/AES-Image-Encryptor.git
 cd AES-Image-Encryptor
 pip install -r requirements.txt
-python main.py
+python AES_Encryptor.py
