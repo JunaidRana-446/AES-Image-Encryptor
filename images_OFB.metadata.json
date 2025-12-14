@@ -1,0 +1,18 @@
+{
+  "mode": "OFB",
+  "key_size": 256,
+  "salt": "jYMHHwmGlMRdJgUb+VG56Q==",
+  "iterations": 200000,
+  "iv_or_nonce": "+Zqbzamdp3PcS3JFbgm/Ig==",
+  "tag": null,
+  "width": 266,
+  "height": 189,
+  "used_password": true,
+  "key_hex": null,
+  "cipher_bin": "images_OFB.bin",
+  "preview_image": "encrypted_OFB.png",
+  "original_filename": "images.jpg",
+  "timestamp": "2025-12-12T11:02:50.460189",
+  "time_taken_sec": 0.373,
+  "security_rating": 4
+}
