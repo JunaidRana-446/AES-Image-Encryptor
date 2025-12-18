@@ -166,7 +166,7 @@ def decrypt_image(meta_or_bin_path, password=None, key_hex=None):
     if meta['used_password']:
         if not password:
             raise ValueError('Password is required for decryption')
-        key = PBKDF2(password, salt, dkLen=meta['key_size'] // 8, count=iters)
+        key = PBKDF2(password, salt, dkLen=meta['key_size'] // 8, count=iters) # type: ignore
     else:
         if not key_hex:
             raise ValueError('Key hex required because no password was used')
@@ -193,7 +193,7 @@ def decrypt_image(meta_or_bin_path, password=None, key_hex=None):
 
     elif mode == 'GCM':
         cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
-        pt = cipher.decrypt_and_verify(ct, tag)
+        pt = cipher.decrypt_and_verify(ct, tag) # type: ignore
 
     else:
         raise ValueError('Unknown AES mode')
@@ -209,6 +209,8 @@ if __name__ == '__main__':
     import customtkinter as ctk
     from tkinter import filedialog, messagebox, simpledialog
     from PIL import Image, ImageTk
+    from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
 
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
@@ -217,7 +219,7 @@ if __name__ == '__main__':
         def __init__(self):
             super().__init__()
             self.title("AES Image Encryptor & Analyzer")
-            self.geometry("1100x800")
+            self.geometry("1900x1000")
 
             self.img_path = ctk.StringVar()
             self.meta_path = ctk.StringVar()
@@ -225,6 +227,55 @@ if __name__ == '__main__':
             self.keyhex = ctk.StringVar()
 
             self.build_ui()
+            self.update_history_dropdown()
+            
+        def clear_graph(self):
+            if self.graph_canvas:
+                self.graph_canvas.get_tk_widget().destroy()
+                self.graph_canvas = None
+
+        def plot_history_internal(self):
+            if not os.path.exists(HISTORY_FILE):
+                messagebox.showinfo("History", "No history found.")
+                return
+
+            with open(HISTORY_FILE, "r") as f:
+                history = json.load(f)
+
+            total = len(history)
+            count = int(self.history_selector.get())
+
+            if count > total:
+                messagebox.showwarning("Error", "Invalid count")
+                return
+
+            selected = history[-count:]
+            modes = [d["mode"] for d in selected]
+            times = [d["time_taken_sec"] for d in selected]
+
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots(figsize=(5, 4))
+            ax.plot(modes, times)
+            ax.scatter(modes, times)
+            ax.set_title(f"{count} Most Recent Encryption Times")
+            ax.set_ylabel("Seconds")
+
+            self.clear_graph()
+
+            self.graph_canvas = FigureCanvasTkAgg(fig, master=self.graph_area)
+
+            self.graph_canvas.draw()
+            self.graph_canvas.get_tk_widget().pack(fill='both', expand=True)
+        def update_history_dropdown(self):
+            if not os.path.exists(HISTORY_FILE):
+                self.history_selector.configure(values=["0"])
+                return
+            with open(HISTORY_FILE,"r") as f:
+                data = json.load(f)
+            options = [str(i) for i in range(1, len(data)+1)]
+            self.history_selector.configure(values=options)
+
+
 
         def build_ui(self):
             # ================= Title =================
@@ -235,7 +286,27 @@ if __name__ == '__main__':
 
             # ================= Top Frames =================
             top_frame = ctk.CTkFrame(main_frame)
-            top_frame.pack(fill='x', pady=10)
+            top_frame.pack(side="left", fill="y", padx=10)
+
+            # ----- Right Side: Graph -----
+            graph_frame = ctk.CTkFrame(main_frame)
+            graph_frame.pack(side='right', padx=20, pady=10, expand=True, fill='both')
+
+            self.graph_canvas = None
+            ctk.CTkLabel(graph_frame, text="Graph Visualization",
+                        font=("Arial", 20, "bold"), text_color="#00ffcc").pack(pady=10)
+
+            self.history_selector = ctk.CTkComboBox(graph_frame, values=["1"])
+            self.history_selector.pack(pady=10)
+
+            self.graph_button = ctk.CTkButton(graph_frame, text="Plot Graph",
+                                            command=self.plot_history_internal)
+            self.graph_button.pack(pady=10)
+
+            self.graph_area = ctk.CTkFrame(graph_frame)
+            self.graph_area.pack(fill="both", expand=True, padx=5, pady=5)
+
+
 
             # ----- Top Left: Image Selection -----
             img_frame = ctk.CTkFrame(top_frame)
@@ -264,6 +335,9 @@ if __name__ == '__main__':
             ctk.CTkLabel(options_frame, text="Password:", font=('Arial', 14, 'bold')).pack(pady=5)
             ctk.CTkEntry(options_frame, textvariable=self.password, show="*").pack(pady=5)
 
+            ctk.CTkLabel(options_frame, text="Key Hex (for decryption):", font=('Arial', 14, 'bold')).pack(pady=5)
+            ctk.CTkEntry(options_frame, textvariable=self.keyhex, show="*").pack(pady=5)
+            
             # Summary textbox moved here
             ctk.CTkLabel(options_frame, text="Encryption Summary", font=('Arial', 16, 'bold'), text_color="#00ffcc").pack(pady=10)
             self.summary_text = ctk.CTkTextbox(options_frame, width=300, height=200, corner_radius=5)
@@ -273,8 +347,7 @@ if __name__ == '__main__':
             self.summary_text.configure(yscrollcommand=self.summary_text_scroll.set)
             self.summary_text_scroll.pack(side='right', fill='y')
 
-            # Plot graph button (popup)
-            ctk.CTkButton(options_frame, text="Plot Graph", command=self.plot_history_popup).pack(pady=10)
+            
 
         def update_summary(self, meta):
             self.summary_text.configure(state='normal')
@@ -283,10 +356,50 @@ if __name__ == '__main__':
             self.summary_text.insert('1.0', summary)
             self.summary_text.configure(state='disabled')
 
+        def show_preview(self, path, resize=(300,300)):
+            try:
+                if not path:
+                    self.preview_label.configure(image=None, text='Preview')
+                    self.preview_label.image = None # type: ignore
+                    return
+
+                p = path
+                # If a metadata or bin was passed, try to read preview_image from it
+                if p.lower().endswith('.bin') or p.lower().endswith('.json'):
+                    try:
+                        meta = load_metadata_auto(p)
+                        p = meta.get('preview_image') or p
+                    except Exception:
+                        pass
+
+                # If preview path exists or it's a direct image, open and show
+                if os.path.exists(p) and p.lower().endswith(('.png','.jpg','.jpeg','.bmp')):
+                    img = Image.open(p).convert('RGB')
+                    img.thumbnail(resize)
+                    tkimg = ImageTk.PhotoImage(img)
+                    self.preview_label.configure(image=tkimg, text='')
+                    self.preview_label.image = tkimg # type: ignore
+                else:
+                    # If original selected file is an image, try to open it directly
+                    if os.path.exists(path) and path.lower().endswith(('.png','.jpg','.jpeg','.bmp')):
+                        img = Image.open(path).convert('RGB')
+                        img.thumbnail(resize)
+                        tkimg = ImageTk.PhotoImage(img)
+                        self.preview_label.configure(image=tkimg, text='')
+                        self.preview_label.image = tkimg # type: ignore
+                    else:
+                        self.preview_label.configure(image=None, text='Preview')
+                        self.preview_label.image = None # type: ignore
+            except Exception:
+                self.preview_label.configure(image=None, text='Preview')
+                self.preview_label.image = None # type: ignore
+
         def load_file(self):
             path = filedialog.askopenfilename(filetypes=[("All Files", "*.png;*.jpg;*.jpeg;*.bmp;*.bin;*.json")])
             if path:
                 self.img_path.set(path)
+                # show immediate preview for selected file (image or encrypted metadata/bin)
+                self.show_preview(path)
 
         def do_encrypt(self):
             try:
@@ -300,11 +413,12 @@ if __name__ == '__main__':
                 img = Image.open(preview).resize((300,300))
                 img = ImageTk.PhotoImage(img)
                 self.preview_label.configure(image=img, text="")
-                self.preview_label.image = img
+                self.preview_label.image = img # type: ignore
 
                 with open(meta_path, 'r') as f:
                     meta = json.load(f)
                 self.update_summary(meta)
+                self.update_history_dropdown()
 
                 messagebox.showinfo("Success", f"Encrypted!\nPreview: {preview}\nBIN: {binf}\nMetadata: {meta_path}")
             except Exception as e:
@@ -317,6 +431,25 @@ if __name__ == '__main__':
                     password=self.password.get() if self.password.get() else None,
                     key_hex=self.keyhex.get() if self.keyhex.get() else None
                 )
+                # attempt to load metadata and update summary
+                try:
+                    meta = load_metadata_auto(self.img_path.get())
+                except Exception:
+                    meta = None
+
+                if meta:
+                    self.update_summary(meta)
+
+                # show decrypted image preview
+                if out and os.path.exists(out):
+                    try:
+                        img = Image.open(out).convert('RGB').resize((300,300))
+                        tkimg = ImageTk.PhotoImage(img)
+                        self.preview_label.configure(image=tkimg, text='')
+                        self.preview_label.image = tkimg # type: ignore
+                    except Exception:
+                        pass
+
                 messagebox.showinfo("Success", f"Decrypted Image: {out}")
             except Exception as e:
                 messagebox.showerror("Error", str(e))
@@ -341,7 +474,7 @@ if __name__ == '__main__':
             modes = [entry['mode'] for entry in history[-n:]]
             plt.figure(figsize=(6,4))
             plt.plot(modes, times, color='#00ccff')
-            plt.scatter(modes, times, color='#00ccff')
+            plt.scatter(modes, times, color='#00Fccff')
             plt.ylabel('Time Taken (sec)')
             plt.title(f'Last {n} Encryption Times')
             plt.show()
